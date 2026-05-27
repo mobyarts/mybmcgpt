@@ -297,14 +297,6 @@ input[type=color]{width:32px;height:28px;border:1px solid #333;border-radius:6px
     </div>
     <div class="ep-sep"></div>
 
-    <div class="pw-section">
-      <label>Change Password</label>
-      <div class="pw-row">
-        <input class="pw-input" type="password" id="pwCurrent" placeholder="Current password">
-        <input class="pw-input" type="password" id="pwNew" placeholder="New password">
-        <button class="pw-btn" onclick="changePassword()">Update</button>
-      </div>
-      <div class="pw-msg" id="pwMsg"></div>
     </div>
     <div class="ep-sep"></div>
 
@@ -360,7 +352,7 @@ input[type=color]{width:32px;height:28px;border:1px solid #333;border-radius:6px
 </div>
 
 <script>
-var BACKEND='';
+var BACKEND='firebase';
 var FONTS=['Dancing Script','Montserrat','Orbitron'];
 var EMOJIS=['🌐','📧','🎵','🎬','📰','🛒','💬','📖','🔗','💼','🏠','⭐','🔍','📊','🎮','🧪','💡','🛠️','📂','🎨','🧠','💰','📅','🚀','🏋️','📷','✈️','🍕','☕','🔒','🎯','🖥️','📱','🌍','🎓','🏦','🎧','🛡️','⚙️','🌙'];
 var TILE_SIZES={xs:72,sm:96,normal:104,large:112};
@@ -387,74 +379,21 @@ function getHGap(){return settings.hgap||28;}
 function getVGap(){return settings.vgap||28;}
 function getGridMaxWidth(){var ts=getTileSize();return settings.cols*ts+(settings.cols-1)*getHGap();}
 
-// ── API ──
-function api(body,cb){
-  fetch(BACKEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),credentials:'include'})
-  .then(function(r){return r.json();}).then(cb).catch(function(){cb({ok:false,msg:'Network error'});});
-}
 
-// ── AUTH ──
-function doLogin(){
-  var pw=document.getElementById('loginPw').value;
-  document.getElementById('loginErr').textContent='';
-  api({action:'login',password:pw},function(r){
-    if(r.ok){document.getElementById('loginScreen').style.display='none';document.getElementById('mainPage').style.display='flex';loadFromServer();}
-    else document.getElementById('loginErr').textContent='Wrong password.';
-  });
+// ── FIREBASE AUTH ──
+function doLogout(){
+  if(window.firebaseSignOut){
+    window.firebaseSignOut();
+  }
 }
-function doLogout(){if(!confirm('Log out?'))return;api({action:'logout'},function(){location.reload();});}
-function checkAuth(){
-  api({action:'check'},function(r){
-    if(r.ok){document.getElementById('mainPage').style.display='flex';loadFromServer();}
-    else document.getElementById('loginScreen').style.display='flex';
-  });
-}
-
 // ── SYNC ──
 function setSyncStatus(msg,type){var el=document.getElementById('syncStatus');el.textContent=msg;el.className='sync-status'+(type?' '+type:'');}
 
-function loadFromServer(){
-  setSyncStatus('Loading…','saving');
-  api({action:'load'},function(r){
-    if(r.ok){
-      if(r.settings&&Object.keys(r.settings).length)Object.assign(settings,r.settings);
-      if(r.cells){cells=r.cells||{};bookmarks=r.bookmarks||[];groups=r.groups||[];}
-      else if(r.bookmarks&&r.bookmarks.length)migrateOldBookmarks(r.bookmarks);
-      applyAllSettings();render();
-      setSyncStatus('Synced ✓','ok');setTimeout(function(){setSyncStatus('','');},2000);
-    } else setSyncStatus('Could not load','err');
-  });
-}
 
-function migrateOldBookmarks(oldBMs){
-  cells={};bookmarks=[];groups=[];
-  var col=0,row=0;
-  oldBMs.forEach(function(b){
-    var id=genId();
-    bookmarks.push({id:id,name:b.name,url:b.url,emoji:b.emoji||'🌐',imgUrl:b.imgUrl||''});
-    cells[row+','+col]=id;col++;
-    if(col>=settings.cols){col=0;row++;}
-  });
-}
-
-function saveToServer(){
-  setSyncStatus('Saving…','saving');
-  api({action:'save',cells:cells,bookmarks:bookmarks,groups:groups,settings:settings},function(r){
-    if(r.ok){setSyncStatus('Saved ✓','ok');setTimeout(function(){setSyncStatus('','');},2000);}
-    else setSyncStatus('Save failed','err');
-  });
-}
-function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveToServer,800);}
+function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveToFirebase,800);}
 
 // ── PASSWORD ──
-function changePassword(){
-  var cur=document.getElementById('pwCurrent').value,nw=document.getElementById('pwNew').value;
-  var msg=document.getElementById('pwMsg');msg.textContent='';msg.className='pw-msg';
-  api({action:'change_password',current:cur,new:nw},function(r){
-    msg.textContent=r.msg;msg.className='pw-msg '+(r.ok?'ok':'err');
-    if(r.ok){document.getElementById('pwCurrent').value='';document.getElementById('pwNew').value='';}
-  });
-}
+
 
 // ── SETTINGS ──
 function genId(){return 'bm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);}
@@ -759,5 +698,124 @@ function showToast(msg,color){var t=document.getElementById('toast');t.textConte
 try{history.replaceState(null,'',window.location.origin+window.location.pathname.replace(/\/[^/]*$/,'/')+'#');}catch(e){}
 checkAuth();
 </script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "mybmcgpt.firebaseapp.com",
+  projectId: "mybmcgpt",
+  storageBucket: "mybmcgpt.firebasestorage.app",
+  messagingSenderId: "95590981931",
+  appId: "PASTE_YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+window.googleLogin = async function(){
+  try{
+    await signInWithPopup(auth, provider);
+  }catch(err){
+    console.error(err);
+    alert("Google login failed");
+  }
+};
+
+window.firebaseSignOut = async function(){
+  await signOut(auth);
+};
+
+window.saveToFirebase = async function(){
+
+  const user = auth.currentUser;
+  if(!user) return;
+
+  try{
+
+    await setDoc(doc(db, 'bookmarks', user.uid), {
+      settings,
+      cells,
+      bookmarks,
+      groups,
+      updatedAt: Date.now()
+    });
+
+    setSyncStatus('Saved ✓','ok');
+
+  }catch(err){
+
+    console.error(err);
+    setSyncStatus('Save failed','err');
+
+  }
+
+};
+
+async function loadFromFirebase(uid){
+
+  try{
+
+    const snap = await getDoc(doc(db, 'bookmarks', uid));
+
+    if(snap.exists()){
+
+      const data = snap.data();
+
+      if(data.settings) Object.assign(settings,data.settings);
+
+      cells = data.cells || {};
+      bookmarks = data.bookmarks || [];
+      groups = data.groups || [];
+
+    }
+
+    applyAllSettings();
+    render();
+
+  }catch(err){
+
+    console.error(err);
+
+  }
+
+}
+
+onAuthStateChanged(auth, async(user)=>{
+
+  if(user){
+
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('mainPage').style.display='flex';
+
+    await loadFromFirebase(user.uid);
+
+  }else{
+
+    document.getElementById('loginScreen').style.display='flex';
+    document.getElementById('mainPage').style.display='none';
+
+  }
+
+});
+</script>
+
 </body>
 </html>
