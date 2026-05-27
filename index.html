@@ -180,9 +180,8 @@ input[type=color]{width:32px;height:28px;border:1px solid #333;border-radius:6px
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <h2>My Bookmarks</h2>
-    <p>Enter your password to continue</p>
-    <input class="login-input" type="password" id="loginPw" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
-    <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <p>Sign in with Google to continue</p>
+        <button class="login-btn" onclick="googleLogin()">Sign In With Google</button>
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
